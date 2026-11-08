@@ -1,0 +1,22 @@
+{
+  "name": "challenger",
+  "version": "0.0.1",
+  "main": "src/Main.mad",
+  "importAliases": {
+    ".": "src"
+  },
+  "dependencies": [
+    {
+      "minVersion": "1.0.0",
+      "url": "https://github.com/brekk/whim/archive/refs/tags/v1.0.0.zip",
+      "description": "Wishes without the hassle of the bad path",
+      "name": "whim"
+    },
+    {
+      "minVersion": "0.1.5",
+      "url": "https://github.com/brekk/ensign/archive/refs/tags/v0.1.5.zip",
+      "description": "Command line flag interpreter",
+      "name": "ensign"
+    }
+  ]
+}
