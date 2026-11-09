@@ -1,0 +1,250 @@
+import Either from "Either"
+import File from "File"
+import Path from "FilePath"
+import Fn from "Function"
+import IO from "IO"
+import Json from "Json"
+import List from "List"
+import Maybe from "Maybe"
+import { Just, Nothing, fromMaybe } from "Maybe"
+import {} from "Scan"
+import String from "String"
+import Wish from "Wish"
+
+import Ensign from "ensign"
+import Declaration from "ensign/Declared"
+import Declared from "ensign/Declared/Flags"
+import EPrint from "ensign/Declared/Print"
+import Flags from "ensign/Flags"
+import Whim from "whim"
+import { Failure } from "whim/Failure"
+
+import Log from "@/Log"
+
+
+
+K = Fn.always
+export type MadlibOptimizationLevel = O0 | O1 | O2 | O3
+instance Scan MadlibOptimizationLevel {
+  scan = pipe(
+    String.trim,
+    Fn.ifElse(
+      String.match("/^[+-]?\\d+$/"),
+      pipe(
+        scan,
+        fromMaybe(0),
+        (x) => (x == 1 ? O1 : x == 2 ? O2 : x == 3 ? O3 : O0),
+        Just,
+      ),
+      (_) => Nothing,
+    ),
+  )
+}
+export type MadlibBuildTarget = BuildJS | BuildLLVM
+instance Scan MadlibBuildTarget {
+  scan = pipe(
+    String.trim,
+    String.toLower,
+    Fn.ifElse(
+      Fn.equals("js"),
+      K(Just(BuildJS)),
+      Fn.ifElse(Fn.equals("llvm"), K(Just(BuildLLVM)), K(Nothing)),
+    ),
+  )
+}
+export type ChallengerFormat = FormatJson | FormatText
+instance Scan ChallengerFormat {
+  scan = pipe(
+    String.trim,
+    String.toLower,
+    Fn.ifElse(
+      Fn.equals("json"),
+      K(Just(FormatJson)),
+      Fn.ifElse(Fn.equals("text"), K(Just(FormatText)), K(Nothing)),
+    ),
+  )
+}
+export FLAGS = [
+  Declared.flagBoolean("help", ["h"], "This text you're reading!"),
+  Declared.flagBoolean("color", ["K"], "Control whether color is active"),
+  Declared.flagString("cwd", ["c"], "Set the current working directory"),
+  Declared.flagBoolean("silent", ["q"], "Control whether the tool produces stdout"),
+  Declared.flagBoolean("coverage", [], "Produce coverage instrumentation"),
+  Declared.flagBoolean(
+    "errorFormat",
+    ["e"],
+    "Format the test output as json or text. Default: text",
+  ),
+  Declared.flagString("filterFile", [], "Filter the tests by file, possibly multiple times"),
+  Declared.flagString("filterTest", [], "Filter the tests by name, possibly multiple times"),
+  Declared.flagBoolean(
+    "watch",
+    ["w"],
+    "Watch the existing files and re-run the test suite on change",
+  ),
+  Declared.flagString("optimization", ["o"], "Set the level of optimization for the compiler"),
+  Declared.flagString("target", ["t"], "Test in different environments. Default: js"),
+  Declared.flagString(
+    "configFileSuffix",
+    [],
+    "What file suffix to search for. Default: '.spec.mad'",
+  ),
+  Declared.flagString(
+    "configTestMain",
+    ["m"],
+    "What testMain value to use. Default: '__ExamMain__'",
+  ),
+  Declared.flagString("configTestDir", ["d"], "What testDir value to use. Default: '.tests'"),
+]
+alias ChallengerConfigPatterns = {
+  filePattern :: String -> Boolean,
+  testDir :: String,
+  testMain :: String,
+}
+alias ChallengerState = {
+  constants :: ChallengerConfigPatterns,
+  coverage :: Boolean,
+  cwd :: String,
+  errorFormat :: ChallengerFormat,
+  filterFile :: List String,
+  filterTest :: List String,
+  optimization :: MadlibOptimizationLevel,
+  showHelp :: Boolean,
+  silent :: Boolean,
+  target :: MadlibBuildTarget,
+  useColor :: Boolean,
+  watch :: Boolean,
+}
+DEFAULT_STATE :: ChallengerState
+export DEFAULT_STATE = {
+  cwd: "",
+  showHelp: false,
+  useColor: true,
+  silent: false,
+  coverage: false,
+  watch: false,
+  filterFile: [],
+  filterTest: [],
+  optimization: O0,
+  target: BuildJS,
+  errorFormat: FormatText,
+  constants: {
+    filePattern: String.endsWith(".spec.mad"),
+    testMain: "__ExamMain__",
+    testDir: ".tests",
+  },
+}
+processFlagState :: ChallengerState
+  -> (ChallengerState -> Flags.Flag -> #[Boolean, ChallengerState])
+  -> List Flags.Flag
+  -> ChallengerState
+processFlagState = (state, process, flags) => {
+  walker = (done, aggState, toProcess) => if (done) {
+    aggState
+  } else {
+    where(toProcess) {
+      [] =>
+        aggState
+
+      [a, ...z] =>
+        where(process(aggState, a)) {
+          #[stop, upState] =>
+            walker(stop, upState, z)
+        }
+    }
+  }
+  return walker(false, state, flags)
+}
+parseArgs = pipe(
+  Flags.parseFlags,
+  Declaration.validate(FLAGS),
+  Either.mapLeft(EPrint.printIssues),
+)
+emptyIsh = pipe(
+  String.trim,
+  Fn.equals(""),
+)
+setFilePattern = pipe(
+  String.trim,
+  String.toLower,
+  Log.env.challenger("setFilePattern"),
+  String.endsWith,
+)
+captureTheFlag :: ChallengerState -> Flags.Flag -> #[Boolean, ChallengerState]
+captureTheFlag = (state, flag) => where(flag) {
+  Flags.Flag(k, v) =>
+    if (k == "cwd") {
+      #[false, { ...state, cwd: v }]
+    } else if (k == "filterFile" && !emptyIsh(v)) {
+      #[false, { ...state, filterFile: [...state.filterFile, v] }]
+    } else if (k == "filterTest" && !emptyIsh(k)) {
+      #[false, { ...state, filterTest: [...state.filterTest, v] }]
+    } else if (k == "optimization") {
+      #[false, { ...state, optimization: scan(v) ?? O0 }]
+    } else if (k == "target") {
+      #[false, { ...state, target: scan(v) ?? BuildLLVM }]
+    } else if (k == "errorFormat") {
+      #[false, { ...state, errorFormat: scan(v) ?? FormatText }]
+    } else if (k == "configFileSuffix") {
+      #[false, { ...state, constants: { ...state.constants, filePattern: setFilePattern(v) } }]
+    } else if (k == "configTestMain") {
+      #[false, { ...state, constants: { ...state.constants, testMain: String.trim(v) } }]
+    } else if (k == "configTestDir") {
+      #[false, { ...state, constants: { ...state.constants, testDir: String.trim(v) } }]
+    } else {
+      #[false, state]
+    }
+
+  Flags.FlagToggle(k, v) =>
+    if (k == "help") {
+      #[true, { ...state, showHelp: v }]
+    } else if (k == "color") {
+      #[false, { ...state, useColor: v }]
+    } else if (k == "silent") {
+      #[false, { ...state, silent: v }]
+    } else if (k == "coverage") {
+      #[false, { ...state, coverage: v }]
+    } else {
+      #[false, state]
+    }
+
+  _ =>
+    #[false, state]
+}
+renderHelp = (useColor, flags) => {
+  fn = (useColor ? EPrint.printLegendWithColor : EPrint.printLegend)
+  return "challenger\n" ++ fn(flags)
+}
+rel = (cwd, x) => pipe(
+  List.append($, [cwd]),
+  Path.joinPath,
+)(x)
+runChallenger :: ChallengerState -> Whim String
+runChallenger = (conf) => do {
+  Log.env.challenger("CONFIG", conf)
+  { cwd } = conf
+  return Whim.bad(Failure("Challenger", "Cli", "failure"))
+}
+main = (args) => {
+  pipe(
+    List.drop(1),
+    Log.env.challenger("raw args"),
+    parseArgs,
+    Log.env.challenger("parsed"),
+    map(processFlagState(DEFAULT_STATE, captureTheFlag)),
+    Either.fromRight(DEFAULT_STATE),
+    Log.env.challenger("processed"),
+    of,
+    chain(
+      Fn.ifElse(
+        .showHelp,
+        (x) => pipe(
+          renderHelp(x.useColor),
+          Whim.good,
+        )(FLAGS),
+        runChallenger,
+      ),
+    ),
+    Whim.fulfill((bad) => { IO.pTrace("no", bad) }, (good) => { IO.put(good) }),
+  )(args)
+}

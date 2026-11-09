@@ -17,6 +17,12 @@
       "url": "https://github.com/brekk/ensign/archive/refs/tags/v0.1.5.zip",
       "description": "Command line flag interpreter",
       "name": "ensign"
+    },
+    {
+      "minVersion": "0.0.2",
+      "url": "https://github.com/brekk/ranked/archive/refs/tags/v0.0.2.zip",
+      "description": "n-tuple conversion and memoization for functions",
+      "name": "ranked"
     }
   ]
 }

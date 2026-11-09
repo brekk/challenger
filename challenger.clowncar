@@ -1,0 +1,6 @@
+challenger
+- test
+- test:fail
+- test:pass
+- suite
+- suite:detail

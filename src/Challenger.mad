@@ -2,21 +2,16 @@ import type { AssertionError } from "Test"
 
 import Dictionary from "Dictionary"
 import { Left, Right } from "Either"
-import FilePath from "FilePath"
 import Fn from "Function"
 import IO from "IO"
 import List from "List"
-import Math from "Math"
 import { Just, Nothing, fromMaybe } from "Maybe"
-import Monad from "Monad"
 import {} from "Number"
 import Process from "Process"
 import { pShow } from "Show"
 import String from "String"
 import Term from "Terminal"
-import Terminal from "Terminal"
 import Test from "Test"
-import Tuple from "Tuple"
 import Wish from "Wish"
 
 import Whim from "whim"
@@ -29,8 +24,8 @@ import _String from "@/String"
 
 
 // total, succeeded, failed
-type ExamSuiteResult = ExamSuiteResult(Integer, Integer, Integer)
-alias CollectedTests = Dictionary String ExamSuiteResult
+type ChallengerSuiteResult = ChallengerSuiteResult(Integer, Integer, Integer)
+alias CollectedTests = Dictionary String ChallengerSuiteResult
 export alias Collector = { getResults :: {} -> CollectedTests, setResults :: CollectedTests -> {} }
 create :: {} -> { getResults :: {} -> CollectedTests, setResults :: CollectedTests -> {} }
 export create = () => {
@@ -44,10 +39,10 @@ export create = () => {
 
   return { getResults, setResults }
 }
-export type ExamResult = Aced(String) | Flunked(String, String)
-export type ExamReport = ExamReport(String, Integer, Integer, Integer)
-instance Semigroup ExamReport {
-  assoc = (a, b) => ExamReport(
+export type ChallengerResult = Aced(String) | Flunked(String, String)
+export type ChallengerReport = ChallengerReport(String, Integer, Integer, Integer)
+instance Semigroup ChallengerReport {
+  assoc = (a, b) => ChallengerReport(
     getMessage(a) ++ getMessage(b),
     getTotal(a) + getTotal(b),
     getSuccessCount(a) + getSuccessCount(b),
@@ -55,43 +50,43 @@ instance Semigroup ExamReport {
   )
 }
 export getMessage = where {
-  ExamReport(d, _, _, _) =>
+  ChallengerReport(d, _, _, _) =>
     d
 }
 export getTotal = where {
-  ExamReport(_, r, _, _) =>
+  ChallengerReport(_, r, _, _) =>
     r
 }
 export getSuccessCount = where {
-  ExamReport(_, _, s, _) =>
+  ChallengerReport(_, _, s, _) =>
     s
 }
 export getFailureCount = where {
-  ExamReport(_, _, _, f) =>
+  ChallengerReport(_, _, _, f) =>
     f
 }
-resultToReport :: ExamResult -> ExamReport
+resultToReport :: ChallengerResult -> ChallengerReport
 export resultToReport = where {
   Flunked(_, m) =>
-    ExamReport(m, 1, 0, 1)
+    ChallengerReport(m, 1, 0, 1)
 
   Aced(_) =>
-    ExamReport("", 1, 1, 0)
+    ChallengerReport("", 1, 1, 0)
 }
-export mergeExamReports = (a, b) => a ++ b
+export mergeChallengerReports = (a, b) => a ++ b
 instance Breakable AssertionError {
   breaks = where {
     Test.AssertionError(expected, actual) =>
-      Failure.Misfit("Exam", "AssertionError", renderExpectation(expected, actual))
+      Failure.Misfit("Challenger", "AssertionError", renderExpectation(expected, actual))
 
     Test.Error(e) =>
-      Failure.Misfit("Exam", "Error", e)
+      Failure.Misfit("Challenger", "Error", e)
 
     Test.ErrorWithMessage(m) =>
-      Failure.Misfit("Exam", "ErrorWithMessage", m)
+      Failure.Misfit("Challenger", "ErrorWithMessage", m)
 
     Test.NotImplemented =>
-      Failure.Misfit("Exam", "NotImplemented", "Sorry!")
+      Failure.Misfit("Challenger", "NotImplemented", "Sorry!")
   }
 }
 IS_COLOR_ENABLED :: Boolean
@@ -130,7 +125,7 @@ renderFailure = (desc, f) => {
       showFail ++ Failure.showFail(f) ++ "\n"
   }
 }
-test :: String -> (String -> Whim {}) -> Whim ExamResult
+test :: String -> (String -> Whim {}) -> Whim ChallengerResult
 export test = (desc, testFn) => pipe(
   testFn,
   Whim.attempt,
@@ -147,7 +142,7 @@ export test = (desc, testFn) => pipe(
     },
   ),
 )(desc)
-testWithTimeout :: Integer -> String -> (String -> Whim {}) -> Whim ExamResult
+testWithTimeout :: Integer -> String -> (String -> Whim {}) -> Whim ChallengerResult
 export testWithTimeout = (ms, desc, testFn) => test(
   desc,
   pipe(
@@ -162,15 +157,15 @@ generateReportSuiteEndMessage = pipe(
 )
 hookFailed :: String -> Whim a -> Whim a
 hookFailed = (label) => Whim.mapFailure(
-  (f) => Failure.Failure("Exam", "SuiteHook", label ++ ": " ++ Failure.showFail(f)),
+  (f) => Failure.Failure("Challenger", "SuiteHook", label ++ ": " ++ Failure.showFail(f)),
 )
-EMPTY_REPORT = ExamReport("", 0, 0, 0)
+EMPTY_REPORT = ChallengerReport("", 0, 0, 0)
 collector = Collector.create()
 runTestSuite :: (Show e, Show f) => String
   -> ({} -> Whim a)
   -> ({} -> Whim b)
-  -> List (Whim ExamResult)
-  -> Wish.Wish {} ExamReport
+  -> List (Whim ChallengerResult)
+  -> Wish.Wish {} ChallengerReport
 runTestSuite = (suitePath, beforeAll, afterAll, testsInSuite) => pipe(
   (tests) => {
     pipe(
@@ -207,13 +202,13 @@ runTestSuite = (suitePath, beforeAll, afterAll, testsInSuite) => pipe(
       where {
         TestReport(msg, total, success, failed) =>
           (total == 0 || failed > 0)
-            ? ExamReport(
+            ? ChallengerReport(
               suitePath ++ msg ++ generateReportSuiteEndMessage(testsInSuite),
               total,
               success,
               failed,
             )
-            : ExamReport("", total, success, failed)
+            : ChallengerReport("", total, success, failed)
       },
     ),
   ),
@@ -238,7 +233,7 @@ runTestSuite = (suitePath, beforeAll, afterAll, testsInSuite) => pipe(
     },
   ),
 )(testsInSuite)
-runAllTestSuites :: List #[String, {} -> Whim a, {} -> Whim b, List (Whim ExamResult)] -> {}
+runAllTestSuites :: List #[String, {} -> Whim a, {} -> Whim b, List (Whim ChallengerResult)] -> {}
 export runAllTestSuites = pipe(
   map(
     where {

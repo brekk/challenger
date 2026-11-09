@@ -1,0 +1,54 @@
+import type { Whim } from "whim"
+
+import Directory from "Directory"
+
+import Whim from "whim"
+import { Failure } from "whim/Failure"
+
+
+
+handleReadFailure = pipe(
+  show,
+  Failure("Directory", "handleReadFailure"),
+)
+read :: String -> Whim (List String)
+export read = pipe(
+  Directory.read,
+  Whim.fromWish(handleReadFailure),
+)
+handleCreateFailure = pipe(
+  show,
+  Failure("Directory", "handleCreateFailure"),
+)
+create :: String -> Directory.CreateOptions -> Whim {}
+export create = (path, options) => pipe(
+  Directory.create(path),
+  Whim.fromWish(handleCreateFailure),
+)(options)
+handleRemoveFailure = pipe(
+  show,
+  Failure("Directory", "handleRemoveFailure"),
+)
+remove :: String -> Directory.RemoveOptions -> Whim {}
+export remove = (path, options) => pipe(
+  Directory.remove(path),
+  Whim.fromWish(handleRemoveFailure),
+)(options)
+handleCopyFailure = pipe(
+  show,
+  Failure("Directory", "handleCopyFailure"),
+)
+copy :: String -> String -> Directory.CopyOptions -> Whim {}
+export copy = (sourcePath, destinationPath, options) => pipe(
+  Directory.copy(sourcePath, destinationPath),
+  Whim.fromWish(handleCopyFailure),
+)(options)
+handleRenameFailure = pipe(
+  show,
+  Failure("Directory", "handleCopyFailure"),
+)
+rename :: String -> String -> Whim {}
+export rename = (sourcePath, destinationPath) => pipe(
+  Directory.rename(sourcePath),
+  Whim.fromWish(handleRenameFailure),
+)(destinationPath)
