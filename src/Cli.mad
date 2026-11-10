@@ -215,14 +215,19 @@ renderHelp = (useColor, flags) => {
   fn = (useColor ? EPrint.printLegendWithColor : EPrint.printLegend)
   return "challenger\n" ++ fn(flags)
 }
-rel = (cwd, x) => pipe(
+pathRelativeTo = (cwd, x) => pipe(
   List.append($, [cwd]),
   Path.joinPath,
 )(x)
 runChallenger :: ChallengerState -> Whim String
 runChallenger = (conf) => do {
   Log.env.challenger("CONFIG", conf)
-  { cwd } = conf
+  { cwd, constants } = conf
+  { filePattern, testDir, testMain } = constants
+  relative = pathRelativeTo(cwd)
+  mainTestPath = relative(testMain)
+  mainTestDir = relative(testDir)
+
   return Whim.bad(Failure("Challenger", "Cli", "failure"))
 }
 main = (args) => {
